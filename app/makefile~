@@ -1,0 +1,20 @@
+# EPOS-- Application Makefile
+
+include $(EPOS)/makedefs
+
+all:		install
+
+$(MACH)_loader:	$(APPLICATION).o 
+		$(ALD) $(ALDFLAGS) -o $@ $<		
+
+$(MACH)_loader.o: $(APPLICATION).cc $(SRC)/system/$(MACH)_system
+		$(ACC) $(ACCFLAGS) -o $@ $<
+		$(ALD) -o $(APPLICATION) $(APPLICATION).o
+
+install: 	$(APPLICATION).o
+		$(STRIP) -o $(APPLICATION).img $<
+		$(INSTALL) $(APPLICATION).img $(IMG)/$(MACH)_loader
+		$(CLEAN) $(APPLICATION).img
+
+clean:
+		$(CLEAN) *.o $(APPLICATION)

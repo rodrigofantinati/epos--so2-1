@@ -1,0 +1,122 @@
+// EPOSi-- Queue Utility Declarations
+
+// This work is licensed under the Creative Commons 
+// Attribution-NonCommercial-NoDerivs License. To view a copy of this license, 
+// visit http://creativecommons.org/licenses/by-nc-nd/2.0/ or send a letter to 
+// Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
+
+#ifndef __queue_h
+#define	__queue_h
+
+#include "list.h"
+
+__BEGIN_SYS
+
+// This is a traditional queue, with insertions at the tail and removals either
+// from the head or from specific objects 
+template <class T>
+class Queue: private List<T>
+{
+private:
+    typedef List<T> List;
+
+public:
+    typedef typename List::Element Element;
+
+public:
+    Queue() {}
+
+    bool empty() const { return List::empty(); }
+    unsigned int size() const { return List::size(); }
+
+    Element * head() { return List::head(); }
+    Element * tail() { return List::tail(); }
+
+    void insert(Element * e) { 	List::insert_tail(e);  }
+
+    Element * remove() { return List::remove_head(); }
+    Element * remove(const T * obj) { return List::remove(obj); }
+
+    Element * search(const T * obj) { return List::search(obj); }
+};
+
+// This is an ordered queue, i.e. objects are inserted in-order based on the 
+// integral value of "order". Note that "order" implies an order, but does not
+// necessarily need to be "the absolute order" in the queue; it could, for
+// instance, be a priority information or a time-out specification.
+// Insertions must be tagged with "order". Removals are just like in the 
+// traditional queue. Elements of Queue and Ordered_Queue may be exchanged.
+// Example: insert(B,7);insert(C,9);insert(A,4)
+// +---+		+---+	+---+	+---+
+// |obj|		| A |-->| B |-->| C |
+// + - +       head -->	+ - +	+ - +	+ - + <-- tail
+// |ord|		| 4 |<--| 7 |<--| 9 |
+// +---+ 		+---+	+---+	+---+
+template <class T>
+class Ordered_Queue: private Ordered_List<T>
+{
+private:
+    typedef Ordered_List<T> List;
+
+public:
+    typedef typename List::Element Element;
+
+public:
+    Ordered_Queue() {}
+
+    bool empty() const { return List::empty(); }
+    unsigned int size() const { return List::size(); }
+
+    Element * head() { return List::head(); }
+    Element * tail() { return List::tail(); }
+
+    void insert(Element * e) { List::insert(e);  }
+    void insert(Element * e, int order) { List::insert(e, order);  }
+
+    Element * remove() { return List::remove_head(); }
+    Element * remove(const T * obj) { return List::remove(obj); }
+
+    Element * search(const T * obj) { return List::search(obj); }
+};
+
+// This is an ordered queue, i.e. objects are inserted in-order based on the 
+// integral value of "order" just like an Ordered_Queue. But differently from
+// that, a Relative_Queue handles "order" as relative offsets. This is very
+// useful for alarm queues. Elements of Relative_Queue cannot be exchanged
+// with elements of Queue or Ordered_Queue.
+// Example: insert(B,7);insert(C,9);insert(A,4)
+// +---+		+---+	+---+	+---+
+// |obj|		| A |-->| B |-->| C |
+// + - +       head -->	+ - +	+ - +	+ - + <-- tail
+// |ord|		| 4 |<--| 3 |<--| 2 |
+// +---+ 		+---+	+---+	+---+
+template <class T>
+class Relative_Queue: private Relative_List<T>
+{
+private:
+    typedef Relative_List<T> List;
+
+public:
+    typedef typename List::Element Element;
+
+public:
+    Relative_Queue() {}
+
+    bool empty() const { return List::empty(); }
+    unsigned int size() const { return List::size(); }
+
+    Element * head() { return List::head(); }
+    Element * tail() { return List::tail(); }
+
+    void insert(Element * e, int order) { List::insert(e, order);  }
+
+    Element * remove() { return List::remove_head(); }
+    Element * remove(const T * obj) { return List::remove(obj); }
+
+    Element * search(const T * obj) { return List::search(obj); }
+};
+
+__END_SYS
+ 
+#endif
+
