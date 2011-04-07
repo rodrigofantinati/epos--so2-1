@@ -14,14 +14,30 @@ __BEGIN_SYS
 Thread * volatile Thread::_running;
 Thread::Queue Thread::_ready;
 Thread::Queue Thread::_suspended;
-
 // Methods
 int Thread::join() {
     db<Thread>(TRC) << "Thread::join(this=" << this
-		    << ",state=" << _state << ")\n";
+        << ",state=" << _state << ")\n";
 
-    while(_state != FINISHING)
-	yield();
+    if(Traits::active_scheduler)
+        CPU::int_disable();
+
+    if(_state != FINISHING) {
+        if(!_ready.empty()) {
+            Thread * old = _running;
+            old->_state = SUSPENDED;
+            _suspended.insert(&old->_link);
+
+            _running = _ready.remove()->object();
+            _running->_state = RUNNING;
+
+            _running->_waitingList.insert(&old->_link);
+            CPU::switch_context(&old->_context, _running->_context);
+        }
+    }
+
+    if(Traits::active_scheduler)
+        CPU::int_enable();
 
     return *((int *)_stack);
 }
@@ -30,7 +46,7 @@ void Thread::pass() {
     db<Thread>(TRC) << "Thread::pass(this=" << this << ")\n";
 
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
     Thread * old = _running;
     old->_state = READY;
@@ -40,125 +56,137 @@ void Thread::pass() {
     _state = RUNNING;
     _running = this;
 
-//     old->_context->save(); // can be used to force an update
-    db<Thread>(INF) << "old={" << old << "," 
-		    << *old->_context << "}\n";
-    db<Thread>(INF) << "new={" << _running << "," 
-		    << *_running->_context << "}\n";
-	
+    //     old->_context->save(); // can be used to force an update
+    db<Thread>(INF) << "old={" << old << ","
+        << *old->_context << "}\n";
+    db<Thread>(INF) << "new={" << _running << ","
+        << *_running->_context << "}\n";
+
     CPU::switch_context(&old->_context, _context);
 
     if(Traits::active_scheduler)
-	CPU::int_enable();
+        CPU::int_enable();
 }
 
-void  Thread::suspend()
+void Thread::suspend()
 {
     db<Thread>(TRC) << "Thread::suspend(this=" << this << ")\n";
 
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
     if(_running != this)
-	_ready.remove(this);
+        _ready.remove(this);
     _state = SUSPENDED;
     _suspended.insert(&_link);
 
     if(!_ready.empty()) {
-	_running = _ready.remove()->object();
-	_running->_state = RUNNING;
+        _running = _ready.remove()->object();
+        _running->_state = RUNNING;
 
-// 	_context->save(); // can be used to force an update
-	db<Thread>(INF) << "old={" << this << "," 
-			<< *_context << "}\n";
-	db<Thread>(INF) << "new={" << _running << "," 
-			<< *_running->_context << "}\n";
+        // 	_context->save(); // can be used to force an update
+        db<Thread>(INF) << "old={" << this << ","
+            << *_context << "}\n";
+        db<Thread>(INF) << "new={" << _running << ","
+            << *_running->_context << "}\n";
 
-	CPU::switch_context(&_context, _running->_context);
+        CPU::switch_context(&_context, _running->_context);
     } else
-	idle(); // implicitly re-enables interrupts
+        idle(); // implicitly re-enables interrupts
 
     if(Traits::active_scheduler)
-	CPU::int_enable();
-}	    
+        CPU::int_enable();
+}
 
-void  Thread::resume() {
+void Thread::resume() {
     db<Thread>(TRC) << "Thread::resume(this=" << this << ")\n";
 
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
     _suspended.remove(this);
     _state = READY;
     _ready.insert(&_link);
 
     if(Traits::active_scheduler)
-	CPU::int_enable();
+        CPU::int_enable();
 }
 
 void Thread::yield() {
     db<Thread>(TRC) << "Thread::yield()\n";
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
     if(!_ready.empty()) {
-	Thread * old = _running;
-	old->_state = READY;
-	_ready.insert(&old->_link);
+        Thread * old = _running;
+        old->_state = READY;
+        _ready.insert(&old->_link);
 
-	_running = _ready.remove()->object();
-	_running->_state = RUNNING;
+        _running = _ready.remove()->object();
+        _running->_state = RUNNING;
 
-// 	old->_context->save(); // can be used to force an update
-	db<Thread>(INF) << "old={" << old << "," 
-			<< *old->_context << "}\n";
-	db<Thread>(INF) << "new={" << _running << "," 
-			<< *_running->_context << "}\n";
+        // 	old->_context->save(); // can be used to force an update
+        db<Thread>(INF) << "old={" << old << ","
+            << *old->_context << "}\n";
+        db<Thread>(INF) << "new={" << _running << ","
+            << *_running->_context << "}\n";
 
-	CPU::switch_context(&old->_context, _running->_context);
+        CPU::switch_context(&old->_context, _running->_context);
     }
 
     if(Traits::active_scheduler)
-	CPU::int_enable();
+        CPU::int_enable();
 }
 
 void Thread::exit(int status)
 {
+    OStream cout;
     db<Thread>(TRC) << "Thread::exit(status=" << status << ")\n";
 
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
     if(_ready.empty() && !_suspended.empty())
-	idle(); // implicitly re-enables interrupts
+        idle(); // implicitly re-enables interrupts
 
     if(Traits::active_scheduler)
-	CPU::int_disable();
+        CPU::int_disable();
 
+    if(!(_running->_waitingList.empty())){
+        Thread * temp;
+        //for to wake up the before Threads
+        while(!(_running->_waitingList.empty())){
+            temp = _running->_waitingList.remove()->object();
+            cout << "Thread: " << temp << " RESUMED\n";
+            _suspended.remove(temp);
+            temp->_state = READY;
+            _ready.insert(&temp->_link);
+        }
+    }
     if(!_ready.empty()) {
-	Thread * old = _running;
-	old->_state = FINISHING;
-	*((int *)(void *)old->_stack) = status;
+        Thread * old = _running;
+        old->_state = FINISHING;
+        *((int *)(void *)old->_stack) = status;
 
-	_running = _ready.remove()->object();
-	_running->_state = RUNNING;
+        _running = _ready.remove()->object();
+        _running->_state = RUNNING;
 
-// 	old->_context->save(); // can be used to force an update
-	db<Thread>(INF) << "old={" << old << "," 
-			<< *old->_context << "}\n";
-	db<Thread>(INF) << "new={" << _running << "," 
-			<< *_running->_context << "}\n";
+        // 	old->_context->save(); // can be used to force an update
+        db<Thread>(INF) << "old={" << old << ","
+            << *old->_context << "}\n";
+        db<Thread>(INF) << "new={" << _running << ","
+            << *_running->_context << "}\n";
 
-	CPU::switch_context(&old->_context, _running->_context);
+        CPU::switch_context(&old->_context, _running->_context);
     } else {
-	db<Thread>(WRN) << "The last thread in the system has exited!\n";
-	db<Thread>(WRN) << "Halting the CPU ...\n";
-    	CPU::int_disable();
-	CPU::halt(); // this must be turned into a conf-feature (reboot, halt)
+        db<Thread>(WRN) << "The last thread in the system has exited!\n";
+        db<Thread>(WRN) << "Halting the CPU ...\n";
+        CPU::int_disable();
+        CPU::halt(); // this must be turned into a conf-feature (reboot, halt)
     }
 
     if(Traits::active_scheduler)
-	CPU::int_enable();
+        CPU::int_enable();
 }
 
 void Thread::idle()

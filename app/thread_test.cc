@@ -33,7 +33,7 @@ int main()
     a = new Thread(&func_a);
     b = new Thread(&func_b);
 
-    m->suspend();
+//    m->suspend();
 
     cout << "Both threads are now done and have suspended themselves. I'll now wake them up so they can exit ...\n";
 
@@ -48,7 +48,7 @@ int main()
 
     delete a;
     delete b;
-    delete m;
+//    delete m;
     
     cout << "I'm also done, bye!\n";
 
@@ -58,7 +58,7 @@ int main()
 int func_a(void)
 {
     for(int i = iterations; i > 0; i--) {
-	for(int i = 0; i < 79; i++)
+	for(int i = 0; i < 15; i++)
 	    cout << "a";
 	cout << "\n";
 	Thread::yield();
@@ -73,13 +73,13 @@ int func_a(void)
 int func_b(void)
 {
     for(int i = iterations; i > 0; i--) {
-	for(int i = 0; i < 79; i++)
+	for(int i = 0; i < 15; i++)
 	    cout << "b";
 	cout << "\n";
 	Thread::yield();
     }
 
-    m->resume();
+//    m->resume();
 
 //     Thread self(Thread::SELF);
 //     self.suspend();
